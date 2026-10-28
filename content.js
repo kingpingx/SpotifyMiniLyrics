@@ -3,11 +3,10 @@
 // window) opens, injects a lyrics toggle + panel into it.
 //
 // Lyrics sources, in order:
-//   1. Spotify's own lyrics (via bridge.js: passive capture of the page's lyrics
-//      responses, or an on-demand request using the page's own session)
+//   1. Spotify's own lyrics (synced or plain) – always wins when available
 //   2. LRCLIB synced
 //   3. NetEase synced (opt-in, via community proxy)
-//   4. Spotify unsynced → LRCLIB plain → lyrics.ovh plain
+//   4. LRCLIB plain → lyrics.ovh plain
 //
 // Layout: when lyrics are open we hide Spotify's artwork and put the panel where
 // it was, layered beneath Spotify's hover controls.
@@ -504,8 +503,10 @@
       return res;
     };
 
+    // Spotify first, always: if it has anything (synced or plain), that is what we show.
+    // The other sources are only consulted when Spotify has nothing for this track.
     const sp = await spotifyLookup(track, changedAt, diag).catch((e) => { diag.spotify = 'error ' + e.message; return undefined; });
-    if (sp && sp.synced) return done(sp);
+    if (sp && (sp.synced || sp.plain)) return done(sp);
 
     let lrc = null, lrcErr = null;
     try { lrc = await lrclibLookup(track, dur); diag.lrclib = describe(lrc); }
@@ -518,7 +519,6 @@
       if (ne && (ne.synced || ne.instrumental)) return done(ne);
     }
 
-    if (sp && sp.plain) return done(sp);
     if (lrc && (lrc.plain || lrc.instrumental)) return done(lrc);
 
     const ovh = await ovhLookup(track).catch((e) => { diag.ovh = 'error ' + e.message; return null; });

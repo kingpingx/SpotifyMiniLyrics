@@ -23,10 +23,11 @@ working on top.
 
 Tried in this order:
 
-1. **Spotify's own lyrics** (default on). The web player loads lyrics for your account whenever its lyrics panel
-   or now-playing sidebar is open; the extension reuses those responses. If the page hasn't loaded lyrics for
-   the current track, it asks Spotify using the same session the page uses. Best coverage, line-synced.
-   This uses Spotify's internal lyrics endpoint, the same way the Spicetify project does.
+1. **Spotify's own lyrics** (default on). Always used when Spotify has them, synced or not. The web player
+   loads lyrics for your account whenever its lyrics panel or now-playing sidebar is open; the extension
+   reuses those responses. If the page hasn't loaded lyrics for the current track, it asks Spotify using the
+   same session the page uses. Best coverage, line-synced. This uses Spotify's internal lyrics endpoint, the
+   same way the Spicetify project does.
 2. **[LRCLIB](https://lrclib.net)**: free, open, community lyrics database with synced lyrics.
 3. **NetEase Cloud Music** (default **off**; enable in Options). Goes through a community-run proxy server,
    so titles/artists of songs you play are sent to a third party. Good coverage of Asian music.
