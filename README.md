@@ -93,3 +93,7 @@ panel and moves it up a layer if needed.
 
 Lyrics data from [LRCLIB](https://lrclib.net), [lyrics.ovh](https://lyrics.ovh), NetEase Cloud Music and
 Spotify. Inspired by Spicetify's Lyrics Plus.
+
+## License
+
+[MIT](LICENSE)
