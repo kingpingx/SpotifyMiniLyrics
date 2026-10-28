@@ -129,25 +129,24 @@
   // ---------------------------------------------------------------------------
   // Reading Spotify's state (from the main tab's now-playing bar)
   // ---------------------------------------------------------------------------
+  // The on-screen player bar is the source of truth: it always reflects what is playing, even when
+  // the web player is remote-controlling another device. The media-session metadata can lag behind,
+  // so it is only used as a fallback and for the album name.
   function getTrack() {
     let title = '', artist = '', album = '';
+    const w = q('[data-testid="now-playing-widget"]');
+    if (w) {
+      title = text(q('[data-testid="context-item-info-title"]', w));
+      artist = [...w.querySelectorAll('[data-testid="context-item-info-artist"]')]
+        .map(text).filter(Boolean).join(', ');
+    }
     try {
       const md = navigator.mediaSession && navigator.mediaSession.metadata;
       if (md && md.title) {
-        title = md.title;
-        artist = md.artist || '';
-        album = md.album || '';
+        if (!title) { title = md.title; artist = md.artist || ''; }
+        if (md.album && norm(md.title) === norm(title)) album = md.album;
       }
     } catch (_) { /* ignore */ }
-
-    if (!title) {
-      const w = q('[data-testid="now-playing-widget"]');
-      if (w) {
-        title = text(q('[data-testid="context-item-info-title"]', w));
-        artist = [...w.querySelectorAll('[data-testid="context-item-info-artist"]')]
-          .map(text).filter(Boolean).join(', ');
-      }
-    }
     return title ? { title, artist, album } : null;
   }
 
@@ -174,16 +173,8 @@
         if (id) return id;
       }
     }
-    // Fallback: any track link on the page whose text is exactly the current title.
-    if (track) {
-      const want = norm(track.title);
-      for (const a of document.querySelectorAll('a[href*="/track/"]')) {
-        if (norm(a.textContent) === want) {
-          const id = idFromHref(a.getAttribute('href'));
-          if (id) return id;
-        }
-      }
-    }
+    // Deliberately no page-wide fallback: a link elsewhere with the same title can be a different
+    // song, and the wrong track id means the wrong lyrics.
     return null;
   }
 
@@ -335,7 +326,7 @@
       return n;
     }
     // Couldn't read the track id: accept lyrics the page fetched itself around this track change.
-    if (latestCaptured && Math.abs(latestCaptured.at - changedAt) < 15000) {
+    if (latestCaptured && latestCaptured.at >= changedAt - 500 && latestCaptured.at - changedAt < 15000) {
       diag.spotify = 'captured';
       return latestCaptured.data;
     }
