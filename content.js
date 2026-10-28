@@ -31,7 +31,7 @@
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
-  const settings = { spotify: true, netease: false };
+  const settings = { spotify: true, netease: false, preferLatin: true };
 
   let pip = null;
   let ui = null;
@@ -365,9 +365,38 @@
     };
   }
 
+  // True when most letters in the text are outside the Latin alphabet (e.g. Devanagari, Cyrillic, CJK).
+  function isNonLatin(s) {
+    if (!s) return false;
+    let latin = 0, other = 0;
+    for (const ch of s) {
+      if (/[A-Za-zÀ-ɏ]/.test(ch)) latin++;
+      else if (/\p{L}/u.test(ch)) other++;
+    }
+    return other > latin;
+  }
+  const recText = (r) => (r && (r.syncedLyrics || r.plainLyrics)) || '';
+
+  // Pick the best record from an LRCLIB search result. With preferLatin, a romanized version wins
+  // over a native-script one (Spotify shows Hindi songs romanized, so this matches what users expect).
+  function pickLrclib(list, durOk, preferLatin) {
+    if (!Array.isArray(list) || !list.length) return null;
+    const withLyrics = list.filter((r) => r.syncedLyrics || r.plainLyrics || r.instrumental);
+    const pool = withLyrics.length ? withLyrics : list;
+    const score = (r) => {
+      let s = 0;
+      if (r.syncedLyrics) s += 4;
+      if (durOk && Math.abs((r.duration || 0) - durOk) <= 3) s += 2;
+      if (preferLatin && !isNonLatin(recText(r))) s += 8;
+      return s;
+    };
+    return pool.slice().sort((a, b) => score(b) - score(a))[0];
+  }
+
   async function lrclibLookup(track, dur) {
     const durOk = dur > 0 && dur <= 3600 ? Math.round(dur) : undefined;
-    const key = `sml:${track.title}|${track.artist}`;
+    const preferLatin = !!settings.preferLatin;
+    const key = `sml:${track.title}|${track.artist}|${preferLatin ? 'lat' : 'any'}`;
     if (memCache.has(key)) return memCache.get(key);
     const stored = await storageGet(key);
     if (stored) { memCache.set(key, stored); return stored; }
@@ -385,15 +414,12 @@
       rec = await api('/get', p);
       if (rec) break;
     }
-    if (!rec) {
+    // No exact match, or the match is in a non-Latin script while a romanized one is preferred:
+    // look through all versions LRCLIB has for this song.
+    if (!rec || (preferLatin && isNonLatin(recText(rec)))) {
       const list = await api('/search', { track_name: ct, artist_name: fa });
-      if (Array.isArray(list) && list.length) {
-        const withLyrics = list.filter((r) => r.syncedLyrics || r.plainLyrics || r.instrumental);
-        const pool = withLyrics.length ? withLyrics : list;
-        rec = (durOk && pool.find((r) => Math.abs((r.duration || 0) - durOk) <= 3))
-          || pool.find((r) => r.syncedLyrics)
-          || pool[0];
-      }
+      const alt = pickLrclib(list, durOk, preferLatin);
+      if (alt && (!rec || !isNonLatin(recText(alt)))) rec = alt;
     }
 
     const result = rec ? normalizeLrclib(rec) : { notFound: true };

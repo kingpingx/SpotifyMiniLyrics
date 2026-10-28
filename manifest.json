@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Spotify Miniplayer Lyrics",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "description": "Adds a synced lyrics panel to the Spotify web player's miniplayer (picture-in-picture window). Sources: Spotify's own lyrics, LRCLIB, lyrics.ovh, optional NetEase.",
   "permissions": ["storage"],
   "host_permissions": ["https://lrclib.net/*", "https://api.lyrics.ovh/*", "https://music.xianqiao.wang/*"],

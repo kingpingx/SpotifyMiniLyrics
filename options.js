@@ -1,9 +1,10 @@
-const DEFAULTS = { spotify: true, netease: false };
+const DEFAULTS = { spotify: true, netease: false, preferLatin: true };
 const KEY = 'sml:settings';
 
 const boxes = {
   spotify: document.getElementById('spotify'),
   netease: document.getElementById('netease'),
+  preferLatin: document.getElementById('preferLatin'),
 };
 
 chrome.storage.local.get(KEY, (r) => {
