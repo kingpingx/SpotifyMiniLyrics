@@ -53,6 +53,7 @@
   let art = null;
   let mode = 'body';
   let lastOcclusionCheck = 0;
+  let pipTimer = null;     // interval handle living in the miniplayer window
   let shiftedRow = null;   // Spotify's control row we moved down
   let rowShift = 0;        // how far (px) we moved it
   let lastError = null;    // last exception (message + stack), for the debug dump
@@ -177,21 +178,40 @@
     return null;
   }
 
+  // The <audio>/<video> element Spotify plays through. Its currentTime is exact and keeps
+  // advancing even when the tab is hidden (the on-screen progress bar does not).
+  function playingMedia(dur) {
+    let best = null;
+    for (const m of document.querySelectorAll('audio, video')) {
+      if (!(m.duration > 0) || m.readyState < 1) continue;
+      const fits = !(dur > 0) || Math.abs(m.duration - dur) <= 3;
+      if (!fits) continue;
+      if (!m.paused) return m;
+      if (!best) best = m;
+    }
+    return best;
+  }
+
   function getPlayback() {
     let pos = parseClock(text(q('[data-testid="playback-position"]')));
     let dur = parseClock(text(q('[data-testid="playback-duration"]')));
     if (dur < 0 && pos >= 0) dur = pos - dur;
+
+    const media = playingMedia(dur);
+    if (media) return { pos: media.currentTime, dur: dur > 0 ? dur : media.duration, exact: true, paused: media.paused };
 
     const bar = q('[data-testid="progress-bar"]');
     if (bar && dur > 0) {
       const pct = parseFloat(bar.style.getPropertyValue('--progress-bar-transform'));
       if (!Number.isNaN(pct)) pos = (dur * pct) / 100;
     }
-    return { pos, dur };
+    return { pos, dur, exact: false };
   }
 
   function estimatePosition() {
-    const { pos } = getPlayback();
+    const pb = getPlayback();
+    if (pb.exact) return pb.pos;
+    const { pos } = pb;
     const t = now();
     if (Number.isNaN(pos)) return NaN;
     if (pos !== lastRawPos) {
@@ -1197,9 +1217,27 @@
     buildUI(win);
     win.addEventListener('pagehide', () => { if (pip === win) detachPip(); });
     win.addEventListener('resize', () => layout());
+    // Timers in the (often hidden) main tab are throttled by Chrome; the miniplayer window is
+    // always visible, so drive the loop from there.
+    try { pipTimer = win.setInterval(tick, TICK_MS); } catch (_) { pipTimer = null; }
+    watchPlayerBar();
+  }
+
+  // React to a track change the moment the player bar re-renders, independent of any timer.
+  let barObserver = null, barObserved = null;
+  function watchPlayerBar() {
+    const w = q('[data-testid="now-playing-widget"]');
+    if (!w || w === barObserved) return;
+    if (barObserver) barObserver.disconnect();
+    barObserved = w;
+    barObserver = new MutationObserver(() => { if (pip) tick(); });
+    barObserver.observe(w, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['href', 'data-uri'] });
   }
 
   function detachPip() {
+    if (pip && pipTimer !== null) { try { pip.clearInterval(pipTimer); } catch (_) { /* ignore */ } }
+    pipTimer = null;
+    if (barObserver) { barObserver.disconnect(); barObserver = null; barObserved = null; }
     pip = null;
     ui = null;
     art = null;
@@ -1223,7 +1261,8 @@
         if (w && w !== pip) attachPip(w);
       } catch (_) { /* ignore */ }
     }, 1000);
-    setInterval(tick, TICK_MS);
+    setInterval(tick, 1000); // fallback only; the real loop runs in the miniplayer window
+    setInterval(() => { if (pip) watchPlayerBar(); }, 2000);
     console.info(TAG, 'ready — open the Spotify miniplayer to see the lyrics button');
   } else {
     console.info(TAG, 'Document Picture-in-Picture is not available in this browser; nothing to do.');
